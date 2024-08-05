@@ -1,6 +1,5 @@
 import java.util.Scanner;
 
-
 class AES {
     public String PlainText;
     public String Key;
@@ -19,10 +18,10 @@ class AES {
 
     void keyGeneration() {
         Scanner sc = new Scanner(System.in);
-        // taking the 16 bit plaintext input
-        System.out.println("Enter the 16 bit plaintext: ");
+        // taking the 16-bit plaintext input
+        System.out.println("Enter the 16-bit plaintext: ");
         PlainText = sc.nextLine();
-        System.out.println("Enter the 16 bit Key: ");
+        System.out.println("Enter the 16-bit Key: ");
         Key = sc.nextLine();
     }
 
@@ -67,31 +66,18 @@ class AES {
         return secondHalf + firstHalf;
     }
 
-    String substituiton(String str) {
-
-        int row1 = Integer.parseInt("" + str.charAt(0) + str.charAt(1), 2); // 1
-        System.out.println(row1);
-
-        int col1 = Integer.parseInt("" + str.charAt(2) + str.charAt(3), 2); // 1
-        System.out.println(col1);
-
-        int row2 = Integer.parseInt("" + str.charAt(4) + str.charAt(5), 2);// 3
-        System.out.println(row2);
-
-        int col2 = Integer.parseInt("" + str.charAt(6) + str.charAt(7), 2);// 3
-        System.out.println(col2);
+    String substitution(String str) {
+        int row1 = Integer.parseInt("" + str.charAt(0) + str.charAt(1), 2);
+        int col1 = Integer.parseInt("" + str.charAt(2) + str.charAt(3), 2);
+        int row2 = Integer.parseInt("" + str.charAt(4) + str.charAt(5), 2);
+        int col2 = Integer.parseInt("" + str.charAt(6) + str.charAt(7), 2);
 
         int firstHalf = substitution[row1][col1];
         int secondHalf = substitution[row2][col2];
-        System.out.println(firstHalf);
-        System.out.println(secondHalf);
+
         String firstHalf1 = integerToBinaryString(firstHalf, 4);
         String secondHalf2 = integerToBinaryString(secondHalf, 4);
-        String finalResult = firstHalf1 + secondHalf2;
-        System.out.println(finalResult);
-        return finalResult;
-
-
+        return firstHalf1 + secondHalf2;
     }
 
     String integerToBinaryString(int value, int length) {
@@ -108,7 +94,6 @@ class AES {
     String binaryStringToHexString(String binaryStr) {
         int decimal = Integer.parseInt(binaryStr, 2);
         String hexStr = Integer.toHexString(decimal);
-        // Ensure the hexadecimal string has the correct length
         int len = (int) Math.ceil(binaryStr.length() / 4.0);
         return String.format("%" + len + "s", hexStr).replace(' ', '0');
     }
@@ -118,163 +103,122 @@ class AES {
             throw new IllegalArgumentException("String length must be 16 bits.");
         }
         StringBuilder sb = new StringBuilder(str);
-        String nibble2 = sb.substring(4, 8); // Second nibble
-        String nibble4 = sb.substring(12, 16); // Fourth nibble
+        String nibble2 = sb.substring(4, 8);
+        String nibble4 = sb.substring(12, 16);
 
-        // Swap nibbles
         sb.replace(4, 8, nibble4);
         sb.replace(12, 16, nibble2);
 
         return sb.toString();
     }
 
-}
+    boolean[] mixedColumnOperation(boolean[] input) {
+        boolean[] output = new boolean[16];
+        int[][] mix = MixedColumn;
 
+        // Process each nibble (4 bits) in the input
+        for (int i = 0; i < 2; i++) {
+            int nibble1 = Integer.parseInt("" + (input[i * 8] ? 1 : 0) + (input[i * 8 + 1] ? 1 : 0) + (input[i * 8 + 2] ? 1 : 0) + (input[i * 8 + 3] ? 1 : 0), 2);
+            int nibble2 = Integer.parseInt("" + (input[i * 8 + 4] ? 1 : 0) + (input[i * 8 + 5] ? 1 : 0) + (input[i * 8 + 6] ? 1 : 0) + (input[i * 8 + 7] ? 1 : 0), 2);
+
+            int result1 = mix[0][0] * nibble1 ^ mix[0][1] * nibble2;
+            int result2 = mix[1][0] * nibble1 ^ mix[1][1] * nibble2;
+
+            String result1Str = integerToBinaryString(result1, 4);
+            String result2Str = integerToBinaryString(result2, 4);
+
+            for (int j = 0; j < 4; j++) {
+                output[i * 8 + j] = result1Str.charAt(j) == '1';
+                output[i * 8 + 4 + j] = result2Str.charAt(j) == '1';
+            }
+        }
+
+        return output;
+    }
+
+    boolean[] xorArrays(boolean[] arr1, boolean[] arr2) {
+        boolean[] result = new boolean[arr1.length];
+        for (int i = 0; i < arr1.length; i++) {
+            result[i] = arr1[i] ^ arr2[i];
+        }
+        return result;
+    }
+
+    public void encrypt() {
+        keyGeneration();
+
+        String[] splitResult = Split(Key);
+
+        boolean[] leftPartKeyConverted = convertStringToBooleanArray(splitResult[0]);
+        boolean[] rightPartKeyConverted = convertStringToBooleanArray(splitResult[1]);
+
+        String rotationW1 = swapHalves(splitResult[1]);
+        boolean[] subRotationW1 = convertStringToBooleanArray(substitution(rotationW1));
+
+        boolean[] w0Rcon = xorArrays(leftPartKeyConverted, Rcon);
+        boolean[] W2 = xorArrays(w0Rcon, subRotationW1);
+
+        boolean[] W3 = xorArrays(W2, rightPartKeyConverted);
+
+        String W3String = booleanArrayToString(W3);
+        String W3SubstitutionSwapped = swapHalves(W3String);
+        String substitutionOnW3 = substitution(W3SubstitutionSwapped);
+
+        boolean[] xorW4 = xorArrays(W2, Rcon2);
+        boolean[] substitutionW3Result = convertStringToBooleanArray(substitutionOnW3);
+        boolean[] W4 = xorArrays(xorW4, substitutionW3Result);
+
+        boolean[] W5 = xorArrays(W4, W3);
+
+        boolean[] K0 = concatenateBooleanArrays(leftPartKeyConverted, rightPartKeyConverted);
+        boolean[] K1 = concatenateBooleanArrays(W2, W3);
+        boolean[] K2 = concatenateBooleanArrays(W4, W5);
+
+        boolean[] plainTextBool = convertStringToBooleanArray(PlainText);
+        boolean[] xorPlainTextK0 = xorArrays(plainTextBool, K0);
+
+        String xorPtK0 = booleanArrayToString(xorPlainTextK0);
+
+        // Debug statement
+        System.out.println("xorPtK0 length: " + xorPtK0.length());
+
+        // Fixing the swapNibbles function call
+        if (xorPtK0.length() != 16) {
+            throw new IllegalArgumentException("XOR result length is not 16 bits.");
+        }
+
+        String swapped2ndNibble4thNibble = swapNibbles(xorPtK0);
+        System.out.println("Swapped 2nd and 4th nibble: " + swapped2ndNibble4thNibble);
+
+        boolean[] mixedColumnsK1 = mixedColumnOperation(convertStringToBooleanArray(swapped2ndNibble4thNibble));
+
+        // Debug statement
+        System.out.println("mixedColumnsK1 length: " + mixedColumnsK1.length);
+
+        String xorMixedColumnsK1String = booleanArrayToString(mixedColumnsK1);
+
+        // Debug statement
+        System.out.println("xorMixedColumnsK1String length: " + xorMixedColumnsK1String.length());
+
+        if (xorMixedColumnsK1String.length() != 16) {
+            throw new IllegalArgumentException("XOR mixed columns result length is not 16 bits.");
+        }
+
+        String swapped2ndNibble4thNibbleFinal = swapNibbles(xorMixedColumnsK1String);
+        boolean[] finalMixedColumnsResult = mixedColumnOperation(convertStringToBooleanArray(swapped2ndNibble4thNibbleFinal));
+
+        boolean[] cipherText = xorArrays(finalMixedColumnsResult, K2);
+
+        String cipherTextString = booleanArrayToString(cipherText);
+        String cipherTextHex = binaryStringToHexString(cipherTextString);
+
+        System.out.println("Cipher Text: " + cipherTextHex);
+    }
+}
 
 public class Main {
     public static void main(String[] args) {
         AES aes = new AES();
-        aes.keyGeneration();
-
-        // Use the Split method
-        String[] splitResult = aes.Split(aes.Key);
-
-        // Print the results
-        System.out.println("W0 part: " + splitResult[0]);
-        System.out.println("W1 part: " + splitResult[1]);
-        System.out.println("This is the left part of the String");
-        boolean[] leftPartKeyConverted = aes.convertStringToBooleanArray(splitResult[0]);
-        boolean[] RightPartKeyConverted = aes.convertStringToBooleanArray(splitResult[1]);
-
-        // W2 key generation
-        // perform the rotaion operation on W1
-        String RotationW1 = aes.swapHalves(splitResult[1]);
-        System.out.println("Rotation operation on W1");
-        System.out.println(RotationW1);
-
-        // converting the String to integer array to interpret the array in binary form
-
-
-        boolean[] SubNin_rotation_operation = aes.convertStringToBooleanArray(aes.substituiton(RotationW1));
-        System.out.println("Result");
-        for (boolean val : SubNin_rotation_operation) {
-            System.out.print(val + " ");
-        }
-        boolean w0_Rcon[] = new boolean[8];
-        // performing XOR opearation
-        for (int i = 0; i < 8; i++) {
-            w0_Rcon[i] = leftPartKeyConverted[i] ^ aes.Rcon[i];
-        }
-        boolean W2[] = new boolean[8];
-        for (int i = 0; i < 8; i++) {
-            W2[i] = w0_Rcon[i] ^ SubNin_rotation_operation[i];
-        }
-        System.out.println("W2");
-        for (boolean val : W2) {
-            System.out.print(val ? 1 : 0);
-        }
-        // now finding w3 and w4
-        // rotate w2 and perform substitution operation
-        //XOR the result with W1 to get W3
-
-        //w3=W2+W1;
-
-        boolean w3[] = new boolean[8];
-        for (int i = 0; i < 8; i++) {
-            w3[i] = W2[i] ^ RightPartKeyConverted[i];
-        }
-        System.out.println("W3 is ");
-        for (boolean val : w3) {
-            System.out.print(val ? 1 : 0);
-        }
-
-        boolean w4[] = new boolean[8];
-
-        // calculate w4
-        // perform swap operation on w3
-        String W3String = aes.booleanArrayToString(w3);
-
-        System.out.println("Swapped W3 digits\n");
-        String W3_Substitution_swapped = aes.swapHalves(W3String);
-        System.out.println(W3_Substitution_swapped);
-        String Substitution_On_W3 = aes.substituiton(W3_Substitution_swapped);
-        System.out.println("Substitution on W3\n");
-        System.out.println(Substitution_On_W3);
-        // perfrom XOR operation
-        boolean Xor_w4[] = new boolean[8];
-        for (int i = 0; i < 8; i++) {
-            Xor_w4[i] = W2[i] ^ aes.Rcon2[i];
-        }
-        boolean substitution_w3_result[] = aes.convertStringToBooleanArray(Substitution_On_W3);
-        for (int i = 0; i < 8; i++) {
-            w4[i] = Xor_w4[i] ^ substitution_w3_result[i];
-        }
-        System.out.println("W4 is: ");
-        for (boolean val : w4) {
-            System.out.print(val ? 1 : 0);
-        }
-        boolean w5[] = new boolean[8];
-        for (int i = 0; i < 8; i++) {
-            w5[i] = w4[i] ^ w3[i];
-        }
-        System.out.println("w5 value\n");
-        for (boolean val : w5) {
-            System.out.print(val ? 1 : 0);
-        }
-        System.out.println("\n");
-
-        // KO
-        // K1
-        // k2
-        boolean K0[] = new boolean[16];
-        boolean K1[] = new boolean[16];
-        boolean K2[] = new boolean[16];
-
-
-        K0 = aes.concatenateBooleanArrays(leftPartKeyConverted, RightPartKeyConverted);
-        System.out.print("K0:");
-        for (boolean val : K0) {
-            System.out.print(val ? 1 + " " : 0 + " ");
-        }
-        System.out.print("\nK1:");
-        K1 = aes.concatenateBooleanArrays(W2, w3);
-        for (boolean val : K1) {
-            System.out.print(val ? 1 + " " : 0 + " ");
-        }
-        System.out.print("\nK2:");
-        K2 = aes.concatenateBooleanArrays(w4, w5);
-        for (boolean val : K2) {
-            System.out.print(val ? 1 + " " : 0 + " ");
-        }
-        String K0_res = aes.booleanArrayToString(K0);
-        String K1_res = aes.booleanArrayToString(K1);
-        String K2_res = aes.booleanArrayToString(K2);
-        String Hex_K0 = aes.binaryStringToHexString(K0_res);
-        String Hex_K1 = aes.binaryStringToHexString(K1_res);
-        String Hex_K2 = aes.binaryStringToHexString(K2_res);
-        System.out.println("\n");
-        System.out.println("K0:" + Hex_K0);
-        System.out.println("K1:" + Hex_K1);
-        System.out.println("K2:" + Hex_K2);
-
-        // XOR the plain text with K0
-        boolean PlainTextBool[] = new boolean[16];
-        PlainTextBool = aes.convertStringToBooleanArray(aes.PlainText);
-
-        boolean XOR_PlainText_K0[] = new boolean[16];
-        for (int i = 0; i < 16; i++) {
-            XOR_PlainText_K0[i] = PlainTextBool[i] ^ K0[i];
-        }
-        System.out.println("XOR K0 with PlainText");
-        for (boolean val : XOR_PlainText_K0) {
-            System.out.print(val ? 1 + " " : 0 + " ");
-        }
-        // now swapping the 2nd nibble and the 4th nibble
-        String XOR_Pt_K0 = aes.booleanArrayToString(XOR_PlainText_K0);
-        String Swapped_2nd_nibble_4th_nibble = aes.swapNibbles(XOR_Pt_K0);
-        System.out.println("Swapped 2nd and 4th nibble: " + Swapped_2nd_nibble_4th_nibble);
-        // perform Mixed Column operation
-
-
+        aes.encrypt();
     }
 }
